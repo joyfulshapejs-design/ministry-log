@@ -399,3 +399,19 @@ html, body {
 .card.compact .progress-block { margin-top: 10px; }
 .card.compact .progress { height: 8px; }
 .card.compact .goal-line { margin-top: 10px; font-size: 14px; }
+
+/* ---- Month ring (Report) ---- */
+.ring-row { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
+.ring { width: 140px; height: 140px; flex-shrink: 0; }
+.ring circle { fill: none; stroke-width: 14; }
+.ring-track { stroke: rgba(120, 120, 128, 0.2); }
+.ring-bar { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.4s; }
+.ring-bar.done { stroke: #34c759; }
+.ring-percent { fill: var(--text); font-size: 28px; font-weight: 700; font-family: inherit; }
+.ring-sub { fill: var(--text-secondary); font-size: 11px; font-family: inherit; }
+.ring-details { flex: 1; min-width: 0; margin: 0; }
+.ring-details div + div { margin-top: 10px; }
+.ring-details dt { font-size: 13px; color: var(--text-secondary); }
+.ring-details dd { margin: 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.year-block { margin-top: 12px; padding-top: 4px; border-top: 0.5px solid var(--separator); }
+@media (prefers-reduced-motion: reduce) { .ring-bar { transition: none; } }

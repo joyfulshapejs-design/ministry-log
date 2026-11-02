@@ -1,6 +1,8 @@
-import { get, put, getAll, getByIndexRange } from '../db.js';
+import { get, put, getAll, getByIndexRange, getSetting } from '../db.js';
 import { h, card } from '../ui.js';
 import { todayISO, monthOf, shiftMonth, monthLabel, formatDuration, sumMinutes } from '../util.js';
+import { computeGoal, monthStatus, serviceYearRange, serviceYearStart, serviceYearLabel, DEFAULT_GOAL_HOURS } from '../goal.js';
+import { progress, ring } from '../progress.js';
 
 // Remembered while the app stays open, so coming back to Report shows the month you were on.
 let shownMonth = null;
@@ -23,12 +25,18 @@ export async function render() {
 
 async function show(root, month) {
   shownMonth = month;
-  const [entries, contacts, saved] = await Promise.all([
+  // The goal is shown for the service year (September to August) that the viewed month belongs to.
+  const { from, to } = serviceYearRange(serviceYearStart(`${month}-01`));
+  const [entries, contacts, saved, yearEntries, goalHours] = await Promise.all([
     getByIndexRange('serviceEntries', 'date', `${month}-01`, `${month}-31`),
     getAll('contacts'),
     get('monthlyRemarks', month),
+    getByIndexRange('serviceEntries', 'date', from, to),
+    getSetting('yearlyGoalHours', DEFAULT_GOAL_HOURS),
   ]);
   const minutes = sumMinutes(entries);
+  const goal = computeGoal({ goalHours, entries: yearEntries, today: `${month}-01` });
+  const standing = monthStatus({ month, monthMinutes: goal.monthMinutes, monthTarget: goal.monthTarget, today: todayISO() });
   const studies = contacts.filter((contact) => contact.isStudy).length;
 
   const nav = h('div', { class: 'month-nav' },
@@ -77,6 +85,7 @@ async function show(root, month) {
         h('div', {}, h('p', { class: 'big-number' }, studies), h('p', { class: 'muted' }, 'Bible studies')),
       ),
     ),
+    goalCard(goal, standing, month),
     card(h('label', { class: 'field stacked' }, h('span', { class: 'field-label' }, 'Remarks'), remarks)),
     h('h2', { class: 'section-title' }, 'Message'),
     card(preview),
@@ -84,6 +93,24 @@ async function show(root, month) {
     navigator.share ? h('button', { class: 'button', type: 'button', onclick: share }, 'Share') : null,
     status,
   ].filter(Boolean));
+}
+
+// The month's ring with what is left, then the service-year bar. Not part of the message you send.
+function goalCard(goal, status, month) {
+  const details = [];
+  if (status.over > 0) details.push(['Over the goal by', formatDuration(status.over)]);
+  else if (status.left === 0) details.push(['This month', 'Goal reached']);
+  else details.push([status.isPast ? 'Fell short by' : 'Left this month', formatDuration(status.left)]);
+  if (status.perDay !== null) details.push([`A day, for ${status.daysLeft} ${status.daysLeft === 1 ? 'day' : 'days'}`, `~${formatDuration(status.perDay)}`]);
+  details.push(['Month goal', formatDuration(goal.monthTarget)]);
+
+  return card(
+    h('h2', {}, 'Month goal'),
+    h('div', { class: 'ring-row' },
+      ring(goal.monthMinutes, goal.monthTarget, `${monthLabel(month)} progress`),
+      h('dl', { class: 'ring-details' }, details.map(([label, value]) => h('div', {}, h('dt', {}, label), h('dd', {}, value))))),
+    h('div', { class: 'year-block' },
+      progress(`Service year ${serviceYearLabel(goal.startYear)}`, goal.yearMinutes, goal.goalMinutes)));
 }
 
 async function copyText(text) {

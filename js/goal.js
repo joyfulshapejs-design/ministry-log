@@ -43,3 +43,18 @@ export function computeGoal({ goalHours, entries, today }) {
     monthsDone, remainingMonths, neededMinutes, perMonthMinutes, paceDiff,
   };
 }
+
+// Where a month stands against its target. For the current month it also works out roughly how much a
+// day is needed to finish, counting today. Past months just report how far short or over they ended.
+export function monthStatus({ month, monthMinutes, monthTarget, today }) {
+  const thisMonth = monthOf(today);
+  const left = Math.max(0, monthTarget - monthMinutes);
+  const over = Math.max(0, monthMinutes - monthTarget);
+  const status = { left, over, isCurrent: month === thisMonth, isPast: month < thisMonth, perDay: null, daysLeft: null };
+  if (status.isCurrent && left > 0) {
+    const [year, m, day] = today.split('-').map(Number);
+    status.daysLeft = new Date(year, m, 0).getDate() - day + 1;
+    status.perDay = Math.ceil(left / status.daysLeft);
+  }
+  return status;
+}

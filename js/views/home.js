@@ -2,6 +2,7 @@ import { getByIndexRange, getAll, getSetting, count } from '../db.js';
 import { backupNudge } from '../backup.js';
 import { computeGoal, serviceYearRange, serviceYearLabel, serviceYearStart, DEFAULT_GOAL_HOURS } from '../goal.js';
 import { h, card } from '../ui.js';
+import { progress } from '../progress.js';
 import { opens } from '../nav.js';
 import { todayISO, monthOf, monthLabel, dateLabel, formatDuration, formatTime, weekdayOf, sumMinutes, activityLabel, needsHomeScreenInstall } from '../util.js';
 import { studiesOnWeekday, visitsDueBy, eventsOn, upcomingEvents, eventDayInfo } from '../schedule.js';
@@ -69,17 +70,7 @@ function backupBanner(nudge) {
     h('span', {}, `${why} Tap to export one from Settings.`));
 }
 
-function progress(label, done, target) {
-  const percent = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0;
-  return h('div', { class: 'progress-block' },
-    h('div', { class: 'progress-text' },
-      h('span', {}, label),
-      h('span', { class: 'progress-numbers' }, `${formatDuration(done)} of ${formatDuration(target)}`)),
-    h('div', { class: 'progress', role: 'progressbar', 'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(percent) },
-      h('div', { class: 'progress-bar', style: `width:${percent}%` })));
-}
-
-// A compact card: the two bars, then one short line with the catch-up amount and pace.
+// A compact card: this month's bar, then one short line with the catch-up amount and pace.
 function goalCard(goal) {
   let line;
   if (goal.neededMinutes === 0) {
@@ -95,7 +86,6 @@ function goalCard(goal) {
   }
   return h('section', { class: 'card compact' },
     h('h2', {}, `Service year ${serviceYearLabel(goal.startYear)}`),
-    progress('Year', goal.yearMinutes, goal.goalMinutes),
     progress('This month', goal.monthMinutes, goal.monthTarget),
     h('p', { class: 'muted goal-line' }, line));
 }
