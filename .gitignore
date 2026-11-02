@@ -1,0 +1,3 @@
+# Local-only files (not part of the published app)
+CLAUDE.md
+.claude/
