@@ -41,13 +41,16 @@ export async function render() {
     hasData: contacts.length > 0 || (await count('serviceEntries')) > 0,
   });
 
+  // What needs doing today comes first; when nothing is due it shrinks to one quiet line.
+  const due = dueList(contacts, events, today);
+
   return h('div', {},
     needsHomeScreenInstall() ? installBanner() : null,
     nudge ? backupBanner(nudge) : null,
+    due ? h('h2', { class: 'section-title first' }, 'Due today') : null,
+    due || h('p', { class: 'muted quiet' }, 'Nothing due today.'),
     summary,
     goalCard(goal),
-    h('h2', { class: 'section-title' }, 'Due today'),
-    dueList(contacts, events, today),
     comingUp(events, today),
     h('h2', { class: 'section-title' }, 'This month'),
     list);
@@ -76,24 +79,25 @@ function progress(label, done, target) {
       h('div', { class: 'progress-bar', style: `width:${percent}%` })));
 }
 
+// A compact card: the two bars, then one short line with the catch-up amount and pace.
 function goalCard(goal) {
-  const lines = [];
+  let line;
   if (goal.neededMinutes === 0) {
-    lines.push('Yearly goal reached.');
+    line = 'Yearly goal reached.';
   } else {
-    const where = goal.remainingMonths === 1 ? 'in this last month' : `in each of the ${goal.remainingMonths} months left, including this one`;
-    lines.push(`To finish the year: ${formatDuration(goal.perMonthMinutes)} ${where}.`);
+    const months = goal.remainingMonths === 1 ? 'in the last month' : `a month for ${goal.remainingMonths} months`;
+    line = `Need ${formatDuration(goal.perMonthMinutes)} ${months}`;
+    if (goal.monthsDone > 0) {
+      const gap = formatDuration(Math.abs(goal.paceDiff));
+      line += goal.paceDiff === 0 ? ' · on pace' : goal.paceDiff > 0 ? ` · ${gap} ahead` : ` · ${gap} behind`;
+    }
+    line += '.';
   }
-  if (goal.monthsDone > 0 && goal.neededMinutes > 0) {
-    const gap = Math.abs(goal.paceDiff);
-    lines.push(goal.paceDiff === 0 ? 'Right on pace.' : goal.paceDiff > 0 ? `${formatDuration(gap)} ahead of pace.` : `${formatDuration(gap)} behind pace.`);
-  }
-  return card(
+  return h('section', { class: 'card compact' },
     h('h2', {}, `Service year ${serviceYearLabel(goal.startYear)}`),
     progress('Year', goal.yearMinutes, goal.goalMinutes),
     progress('This month', goal.monthMinutes, goal.monthTarget),
-    lines.map((line) => h('p', { class: 'muted goal-line' }, line)),
-  );
+    h('p', { class: 'muted goal-line' }, line));
 }
 
 // Events happening today, then studies scheduled for today's weekday, then visits due today or overdue.
@@ -101,7 +105,7 @@ function dueList(contacts, events, today) {
   const todays = eventsOn(events, today);
   const studies = studiesOnWeekday(contacts, weekdayOf(today));
   const visits = visitsDueBy(contacts, today);
-  if (!todays.length && !studies.length && !visits.length) return card(h('p', { class: 'muted' }, 'Nothing due today.'));
+  if (!todays.length && !studies.length && !visits.length) return null;
 
   const rows = [
     ...todays.map((event) => dueRow(`#event/${event.id}`, event.title,
