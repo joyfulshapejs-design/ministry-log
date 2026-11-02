@@ -4,8 +4,8 @@ import { computeGoal, serviceYearRange, serviceYearLabel, serviceYearStart, DEFA
 import { h, card } from '../ui.js';
 import { progress } from '../progress.js';
 import { opens } from '../nav.js';
-import { todayISO, monthOf, monthLabel, dateLabel, formatDuration, formatTime, weekdayOf, sumMinutes, activityLabel, needsHomeScreenInstall } from '../util.js';
-import { studiesOnWeekday, visitsDueBy, eventsOn, upcomingEvents, eventDayInfo } from '../schedule.js';
+import { todayISO, addDays, monthOf, monthLabel, dateLabel, formatDuration, formatTime, weekdayOf, sumMinutes, activityLabel, needsHomeScreenInstall } from '../util.js';
+import { studiesOnWeekday, visitsDueBy, visitsDueOn, eventsOn, upcomingEvents, eventDayInfo } from '../schedule.js';
 
 const FROM_HOME = opens('#home');
 
@@ -42,17 +42,19 @@ export async function render() {
     hasData: contacts.length > 0 || (await count('serviceEntries')) > 0,
   });
 
-  // What needs doing today comes first; when nothing is due it shrinks to one quiet line.
-  const due = dueList(contacts, events, today);
+  // The first glance: today and tomorrow, so the plan is clear before anything else.
+  const tomorrow = addDays(today, 1);
 
   return h('div', {},
     needsHomeScreenInstall() ? installBanner() : null,
     nudge ? backupBanner(nudge) : null,
-    due ? h('h2', { class: 'section-title first' }, 'Due today') : null,
-    due || h('p', { class: 'muted quiet' }, 'Nothing due today.'),
+    h('h2', { class: 'section-title first' }, 'Today'),
+    dayPlan(contacts, events, today, today),
+    h('h2', { class: 'section-title' }, 'Tomorrow'),
+    dayPlan(contacts, events, tomorrow, today),
     summary,
     goalCard(goal),
-    comingUp(events, today),
+    comingUp(events, tomorrow),
     h('h2', { class: 'section-title' }, 'This month'),
     list);
 }
@@ -90,30 +92,41 @@ function goalCard(goal) {
     h('p', { class: 'muted goal-line' }, line));
 }
 
-// Events happening today, then studies scheduled for today's weekday, then visits due today or overdue.
-function dueList(contacts, events, today) {
-  const todays = eventsOn(events, today);
-  const studies = studiesOnWeekday(contacts, weekdayOf(today));
-  const visits = visitsDueBy(contacts, today);
-  if (!todays.length && !studies.length && !visits.length) return null;
+// What is planned for one day: its events, then studies scheduled for that weekday, then visits due.
+// For today, visits that are overdue are included too, so a missed visit is not forgotten.
+function dayPlan(contacts, events, iso, today) {
+  const isToday = iso === today;
+  const dayEvents = eventsOn(events, iso);
+  const studies = studiesOnWeekday(contacts, weekdayOf(iso));
+  const visits = isToday ? visitsDueBy(contacts, iso) : visitsDueOn(contacts, iso);
+  const when = isToday ? ' today' : '';
+
+  if (!dayEvents.length && !studies.length && !visits.length) {
+    return h('p', { class: 'muted quiet' }, isToday ? 'Nothing due today.' : 'Nothing planned for tomorrow.');
+  }
 
   const rows = [
-    ...todays.map((event) => dueRow(`#event/${event.id}`, event.title,
-      ['Event today', event.time ? formatTime(event.time) : '', eventDayInfo(event, today)].filter(Boolean).join(' · '))),
-    ...studies.map((contact) => dueRow(`#contact/${contact.id}`, contact.name, `Bible study today${contact.studyTime ? ` · ${formatTime(contact.studyTime)}` : ''}`)),
-    ...visits.map((contact) => dueRow(`#contact/${contact.id}`, contact.name, contact.nextVisitDate === today ? 'Visit due today' : `Visit overdue · was ${dateLabel(contact.nextVisitDate)}`)),
+    ...dayEvents.map((event) => dueRow(`#event/${event.id}`, event.title,
+      [`Event${when}`, event.time ? formatTime(event.time) : '', eventDayInfo(event, iso)].filter(Boolean).join(' · '))),
+    ...studies.map((contact) => dueRow(`#contact/${contact.id}`, contact.name, `Bible study${when}${contact.studyTime ? ` · ${formatTime(contact.studyTime)}` : ''}`)),
+    ...visits.map((contact) => dueRow(`#contact/${contact.id}`, contact.name, contact.nextVisitDate === iso ? `Visit due${when}` : `Visit overdue · was ${dateLabel(contact.nextVisitDate)}`)),
   ];
   return h('div', { class: 'list' }, rows);
 }
 
-// Events starting in the next two weeks, so an assembly or convention is not a surprise.
-function comingUp(events, today) {
-  const soon = upcomingEvents(events, today, 14).slice(0, 5);
-  if (!soon.length) return null;
+// Events starting in the next 30 days, so an assembly or convention is not a surprise. The heading
+// is always shown so it is clear the app looked, even when nothing is coming up.
+const COMING_UP_DAYS = 30;
+
+// `tomorrow` is the starting point because today and tomorrow already have their own sections above.
+function comingUp(events, tomorrow) {
+  const soon = upcomingEvents(events, tomorrow, COMING_UP_DAYS - 1).slice(0, 5);
   return h('div', {},
     h('h2', { class: 'section-title' }, 'Coming up'),
-    h('div', { class: 'list' }, soon.map((event) =>
-      dueRow(`#event/${event.id}`, event.title, [dateLabel(event.date), event.time ? formatTime(event.time) : ''].filter(Boolean).join(' · ')))));
+    soon.length
+      ? h('div', { class: 'list' }, soon.map((event) =>
+        dueRow(`#event/${event.id}`, event.title, [dateLabel(event.date), event.time ? formatTime(event.time) : ''].filter(Boolean).join(' · '))))
+      : h('p', { class: 'muted quiet' }, `Nothing in the next ${COMING_UP_DAYS} days.`));
 }
 
 function dueRow(href, title, sub) {
