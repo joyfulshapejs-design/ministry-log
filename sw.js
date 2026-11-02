@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION on every release so phones pick up the new files.
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const CACHE_NAME = `ministry-log-${CACHE_VERSION}`;
 
 // Every file the app needs to run offline. Add new files here as phases add them.
@@ -23,6 +23,7 @@ const PRECACHE = [
   'js/views/report.js',
   'js/views/contacts.js',
   'js/views/calendar.js',
+  'js/views/event.js',
   'js/views/settings.js',
   'js/views/contact.js',
   'js/views/session.js',

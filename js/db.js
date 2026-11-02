@@ -1,7 +1,7 @@
 // The only module that touches IndexedDB. Everything else goes through these helpers.
 
 const DB_NAME = 'ministry-log';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -22,7 +22,12 @@ function upgrade(db, oldVersion) {
     db.createObjectStore('monthlyRemarks', { keyPath: 'month' });
     db.createObjectStore('settings', { keyPath: 'key' });
   }
-  // Future: if (oldVersion < 2) { ... }
+  // Version 2 adds calendar events. Existing stores and records are left exactly as they are.
+  if (oldVersion < 2) {
+    const events = db.createObjectStore('events', { keyPath: 'id', autoIncrement: true });
+    events.createIndex('date', 'date');
+  }
+  // Future: if (oldVersion < 3) { ... }
 }
 
 export function openDB() {
@@ -30,7 +35,15 @@ export function openDB() {
     dbPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => upgrade(request.result, event.oldVersion);
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        // If a newer version of the app needs to upgrade the database, step aside instead of blocking it.
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
       request.onblocked = () => reject(new Error('Database upgrade blocked by another tab'));
     }).catch((error) => {
@@ -136,5 +149,5 @@ export async function getSetting(key, fallback = null) {
 
 export const setSetting = (key, value) => put('settings', { key, value });
 
-export const STORE_NAMES = ['serviceEntries', 'contacts', 'studySessions', 'monthlyRemarks', 'settings'];
+export const STORE_NAMES = ['serviceEntries', 'contacts', 'studySessions', 'monthlyRemarks', 'events', 'settings'];
 export { DB_VERSION };

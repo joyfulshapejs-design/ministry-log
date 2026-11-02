@@ -1,6 +1,6 @@
 import { get, put, remove, getAll, getAllByIndex } from '../db.js';
 import { h, card } from '../ui.js';
-import { WEEKDAYS, dateLabel, phoneDigits } from '../util.js';
+import { WEEKDAYS, dateLabel, phoneDigits, messengerHandle, messengerLink } from '../util.js';
 import { goBack, returnHash } from '../nav.js';
 
 // arg is the contact id when viewing/editing, or '' when adding.
@@ -10,13 +10,14 @@ export async function render(arg) {
   if (id && !existing) return h('p', { class: 'muted' }, 'That contact no longer exists.');
 
   const contact = existing || {
-    name: '', address: '', phone: '', notes: '', isStudy: false, nextVisitDate: null,
+    name: '', address: '', phone: '', messenger: '', notes: '', isStudy: false, nextVisitDate: null,
     studyDay: null, studyTime: null, publication: '', lessonNumber: null,
   };
 
   const name = h('input', { type: 'text', required: true, autocapitalize: 'words', autocomplete: 'off', placeholder: 'Name', value: contact.name });
   const address = h('input', { type: 'text', autocomplete: 'off', placeholder: 'Optional', value: contact.address });
   const phone = h('input', { type: 'tel', autocomplete: 'off', placeholder: 'Optional', value: contact.phone });
+  const messenger = h('input', { type: 'text', autocapitalize: 'none', autocorrect: 'off', autocomplete: 'off', spellcheck: false, placeholder: 'Username or link', value: contact.messenger || '' });
   const nextVisit = h('input', { type: 'date', value: contact.nextVisitDate || '' });
   const notes = h('textarea', { rows: 3, placeholder: 'Optional', value: contact.notes });
 
@@ -40,6 +41,13 @@ export async function render(arg) {
       name.focus();
       return;
     }
+    // A pasted Messenger link is reduced to just the username.
+    const handle = messengerHandle(messenger.value);
+    if (handle === null) {
+      error.textContent = 'That does not look like a Messenger username or link. Use the name from their profile link (facebook.com/their.name) or paste their m.me link.';
+      messenger.focus();
+      return;
+    }
     const now = new Date().toISOString();
     const key = await put('contacts', {
       ...(existing || {}),
@@ -47,6 +55,7 @@ export async function render(arg) {
       name: name.value.trim(),
       address: address.value.trim(),
       phone: phone.value.trim(),
+      messenger: handle,
       notes: notes.value.trim(),
       isStudy: isStudy.checked,
       nextVisitDate: nextVisit.value || null,
@@ -70,13 +79,14 @@ export async function render(arg) {
 
   const digits = contact.phone ? phoneDigits(contact.phone) : '';
   const children = [];
-  if (existing && digits) {
+  if (existing && (digits || existing.messenger)) {
     children.push(h('div', { class: 'actions' },
-      h('a', { class: 'button', href: `tel:${digits}` }, 'Call'),
-      h('a', { class: 'button', href: `sms:${digits}` }, 'Message')));
+      digits ? h('a', { class: 'button', href: `tel:${digits}` }, 'Call') : null,
+      digits ? h('a', { class: 'button', href: `sms:${digits}` }, 'Text') : null,
+      existing.messenger ? h('a', { class: 'button', href: messengerLink(existing.messenger), target: '_blank', rel: 'noopener' }, 'Messenger') : null));
   }
   children.push(
-    h('div', { class: 'card form-group' }, field('Name', name), field('Address', address), field('Phone', phone), field('Next visit', nextVisit)),
+    h('div', { class: 'card form-group' }, field('Name', name), field('Address', address), field('Phone', phone), field('Messenger', messenger), field('Next visit', nextVisit)),
     h('div', { class: 'card form-group' }, h('label', { class: 'field stacked' }, h('span', { class: 'field-label' }, 'Notes'), notes)),
     h('div', { class: 'card form-group' }, h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Bible study'), h('span', { class: 'switch' }, isStudy, h('span', { class: 'switch-track' })))),
     studyFields,

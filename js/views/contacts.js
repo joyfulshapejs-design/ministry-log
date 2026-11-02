@@ -30,6 +30,7 @@ function matches(contact, text) {
   const digits = phoneDigits(needle);
   return contact.name.toLowerCase().includes(needle)
     || contact.address.toLowerCase().includes(needle)
+    || (contact.messenger || '').toLowerCase().includes(needle)
     || (digits.length > 0 && phoneDigits(contact.phone).includes(digits));
 }
 

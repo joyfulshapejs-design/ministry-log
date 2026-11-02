@@ -4,7 +4,8 @@ import { exportAll } from './db.js';
 import { todayISO } from './util.js';
 
 export const BACKUP_APP = 'ministry-log';
-export const BACKUP_FORMAT = 1;
+// Format 2 added "events". Format 1 backups (made before events existed) still import, with no events.
+export const BACKUP_FORMAT = 2;
 export const MAX_GOAL_HOURS = 5000;
 export const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
 
@@ -66,6 +67,7 @@ export function validateBackup(raw) {
       name: c.name,
       address: text(c.address),
       phone: text(c.phone),
+      messenger: text(c.messenger),
       notes: text(c.notes),
       isStudy: c.isStudy === true,
       nextVisitDate: dateOrNull(c.nextVisitDate),
@@ -115,6 +117,24 @@ export function validateBackup(raw) {
     monthlyRemarks.push({ ...r, remarks: text(r.remarks) });
   }
 
+  // Older (format 1) backups have no events section at all.
+  const rawEvents = raw.data.events === undefined ? [] : raw.data.events;
+  if (!Array.isArray(rawEvents)) return fail('The backup’s "events" section is damaged.');
+  const eventIds = new Set();
+  const events = [];
+  for (const [i, ev] of rawEvents.entries()) {
+    if (!isObject(ev) || !isId(ev.id) || !isText(ev.title) || !ev.title.trim()) return fail(`Event ${i + 1} is damaged.`);
+    if (!isDate(ev.date)) return fail(`Event ${i + 1} has an invalid date.`);
+    if (ev.endDate != null && (!isDate(ev.endDate) || ev.endDate < ev.date)) return fail(`Event ${i + 1} has an invalid end date.`);
+    if (seen(eventIds, ev.id)) return fail(`Event ${i + 1} repeats an earlier event.`);
+    events.push({
+      ...ev,
+      endDate: ev.endDate && ev.endDate !== ev.date ? ev.endDate : null,
+      time: timeOrNull(ev.time),
+      note: text(ev.note),
+    });
+  }
+
   // Only settings this version understands are restored; anything else in the file is ignored.
   const settings = [];
   for (const row of raw.data.settings) {
@@ -127,12 +147,13 @@ export function validateBackup(raw) {
 
   return {
     ok: true,
-    data: { serviceEntries, contacts, studySessions, monthlyRemarks, settings },
+    data: { serviceEntries, contacts, studySessions, monthlyRemarks, events, settings },
     summary: {
       entries: serviceEntries.length,
       contacts: contacts.length,
       notes: studySessions.length,
       remarks: monthlyRemarks.length,
+      events: events.length,
     },
     repaired: { links: removedLinks, notes: removedNotes },
     exportedAt: isText(raw.exportedAt) && !Number.isNaN(Date.parse(raw.exportedAt)) ? raw.exportedAt : null,

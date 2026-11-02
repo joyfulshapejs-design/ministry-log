@@ -5,7 +5,7 @@ import {
   todayISO, monthOf, shiftMonth, monthLabel, fullDateLabel, formatDuration, formatTime,
   weekdayOf, activityLabel,
 } from '../util.js';
-import { studiesOnWeekday, visitsDueOn } from '../schedule.js';
+import { studiesOnWeekday, visitsDueOn, eventsOn, eventDayInfo } from '../schedule.js';
 
 // Remembered while the app stays open, so coming back from a form shows the same month and day.
 let shownMonth = null;
@@ -25,10 +25,11 @@ export async function render() {
 async function show(root) {
   const month = shownMonth;
   const today = todayISO();
-  const [entries, contacts, sessions] = await Promise.all([
+  const [entries, contacts, sessions, events] = await Promise.all([
     getByIndexRange('serviceEntries', 'date', `${month}-01`, `${month}-31`),
     getAll('contacts'),
     getByIndexRange('studySessions', 'date', `${month}-01`, `${month}-31`),
+    getAll('events'),
   ]);
   const names = new Map(contacts.map((contact) => [contact.id, contact.name]));
 
@@ -62,7 +63,7 @@ async function show(root) {
       ),
       grid(),
       h('p', { class: 'legend' },
-        h('i', { class: 'dot study' }), ' Bible study  ', h('i', { class: 'dot visit' }), ' Visit due'),
+        h('i', { class: 'dot study' }), ' Bible study  ', h('i', { class: 'dot visit' }), ' Visit due  ', h('i', { class: 'dot event' }), ' Event'),
       detail(),
     );
   }
@@ -79,11 +80,13 @@ async function show(root) {
       const minutes = (entriesByDate.get(iso) || []).reduce((sum, entry) => sum + entry.minutes, 0);
       const hasStudy = studiesOnWeekday(contacts, weekdayOf(iso)).length > 0;
       const hasVisit = visitDates.has(iso);
+      const hasEvent = eventsOn(events, iso).length > 0;
 
       const spoken = [fullDateLabel(iso)];
       if (minutes) spoken.push(`${formatDuration(minutes)} hours`);
       if (hasStudy) spoken.push('Bible study');
       if (hasVisit) spoken.push('visit due');
+      if (hasEvent) spoken.push('event');
 
       cells.push(h('button', {
         class: `day${iso === today ? ' today' : ''}${iso === selected ? ' selected' : ''}`,
@@ -94,8 +97,11 @@ async function show(root) {
       },
       h('span', { class: 'day-num' }, d),
       minutes ? h('span', { class: 'day-hours' }, formatDuration(minutes)) : null,
-      hasStudy || hasVisit
-        ? h('span', { class: 'dots' }, hasStudy ? h('i', { class: 'dot study' }) : null, hasVisit ? h('i', { class: 'dot visit' }) : null)
+      hasStudy || hasVisit || hasEvent
+        ? h('span', { class: 'dots' },
+          hasStudy ? h('i', { class: 'dot study' }) : null,
+          hasVisit ? h('i', { class: 'dot visit' }) : null,
+          hasEvent ? h('i', { class: 'dot event' }) : null)
         : null));
     }
 
@@ -110,11 +116,18 @@ async function show(root) {
     const scheduled = studiesOnWeekday(contacts, weekdayOf(selected));
     const held = sessionsByDate.get(selected) || [];
     const due = visitsDueOn(contacts, selected);
-    const empty = !dayEntries.length && !scheduled.length && !held.length && !due.length;
+    const dayEvents = eventsOn(events, selected);
+    const empty = !dayEntries.length && !scheduled.length && !held.length && !due.length && !dayEvents.length;
 
     const sections = [
       h('h2', { class: 'section-title' }, `${fullDateLabel(selected)}${dayMinutes ? ` · ${formatDuration(dayMinutes)}` : ''}`),
     ];
+
+    if (dayEvents.length) {
+      sections.push(h('div', { class: 'list' }, dayEvents.map((event) =>
+        row(`#event/${event.id}`, event.title,
+          [event.time ? formatTime(event.time) : '', eventDayInfo(event, selected), event.note].filter(Boolean).join(' · ') || 'Event'))));
+    }
 
     if (dayEntries.length) {
       sections.push(h('div', { class: 'list' }, dayEntries.map((entry) => {
@@ -134,7 +147,9 @@ async function show(root) {
     }
     if (empty) sections.push(card(h('p', { class: 'muted' }, 'Nothing on this day.')));
 
-    sections.push(h('a', { class: 'button primary', href: `#entry/date/${selected}`, onclick: FROM_CALENDAR }, 'Add time for this day'));
+    sections.push(
+      h('a', { class: 'button primary', href: `#entry/date/${selected}`, onclick: FROM_CALENDAR }, 'Add time for this day'),
+      h('a', { class: 'button', href: `#event/date/${selected}`, onclick: FROM_CALENDAR }, 'Add event for this day'));
     return h('div', {}, ...sections);
   }
 

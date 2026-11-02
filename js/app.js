@@ -7,6 +7,7 @@ import * as contacts from './views/contacts.js';
 import * as contact from './views/contact.js';
 import * as session from './views/session.js';
 import * as calendar from './views/calendar.js';
+import * as event from './views/event.js';
 import * as settings from './views/settings.js';
 import { clearReturn } from './nav.js';
 import { hasPin } from './pin.js';
@@ -17,6 +18,7 @@ const SCREENS = {
   home: { title: () => 'Home', tab: 'home', render: home.render },
   entry: { title: (arg) => (arg && !arg.startsWith('date/') ? 'Edit Entry' : 'Add Time'), tab: 'home', render: entry.render, form: true },
   calendar: { title: () => 'Calendar', tab: 'calendar', render: calendar.render },
+  event: { title: (arg) => (arg && !arg.startsWith('date/') ? 'Edit Event' : 'Add Event'), tab: 'calendar', render: event.render, form: true },
   contacts: { title: () => 'Contacts', tab: 'contacts', render: contacts.render },
   contact: { title: (arg) => (arg ? 'Contact' : 'New Contact'), tab: 'contacts', render: contact.render, form: true },
   session: { title: (arg) => (arg.includes('/') ? 'Edit Study Note' : 'Study Note'), tab: 'contacts', render: session.render, form: true },

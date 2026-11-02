@@ -4,7 +4,7 @@ import { computeGoal, serviceYearRange, serviceYearLabel, serviceYearStart, DEFA
 import { h, card } from '../ui.js';
 import { opens } from '../nav.js';
 import { todayISO, monthOf, monthLabel, dateLabel, formatDuration, formatTime, weekdayOf, sumMinutes, activityLabel, needsHomeScreenInstall } from '../util.js';
-import { studiesOnWeekday, visitsDueBy } from '../schedule.js';
+import { studiesOnWeekday, visitsDueBy, eventsOn, upcomingEvents, eventDayInfo } from '../schedule.js';
 
 const FROM_HOME = opens('#home');
 
@@ -14,6 +14,7 @@ export async function render() {
   const entries = await getByIndexRange('serviceEntries', 'date', `${month}-01`, `${month}-31`);
   const contacts = await getAll('contacts');
   const names = new Map(contacts.map((contact) => [contact.id, contact.name]));
+  const events = await getAll('events');
 
   const { from, to } = serviceYearRange(serviceYearStart(today));
   const goal = computeGoal({
@@ -46,7 +47,8 @@ export async function render() {
     summary,
     goalCard(goal),
     h('h2', { class: 'section-title' }, 'Due today'),
-    dueList(contacts, today),
+    dueList(contacts, events, today),
+    comingUp(events, today),
     h('h2', { class: 'section-title' }, 'This month'),
     list);
 }
@@ -94,23 +96,36 @@ function goalCard(goal) {
   );
 }
 
-// Studies scheduled for today's weekday, then visits due today or overdue.
-function dueList(contacts, today) {
+// Events happening today, then studies scheduled for today's weekday, then visits due today or overdue.
+function dueList(contacts, events, today) {
+  const todays = eventsOn(events, today);
   const studies = studiesOnWeekday(contacts, weekdayOf(today));
   const visits = visitsDueBy(contacts, today);
-  if (!studies.length && !visits.length) return card(h('p', { class: 'muted' }, 'Nothing due today.'));
+  if (!todays.length && !studies.length && !visits.length) return card(h('p', { class: 'muted' }, 'Nothing due today.'));
 
   const rows = [
-    ...studies.map((contact) => dueRow(contact, `Bible study today${contact.studyTime ? ` · ${formatTime(contact.studyTime)}` : ''}`)),
-    ...visits.map((contact) => dueRow(contact, contact.nextVisitDate === today ? 'Visit due today' : `Visit overdue · was ${dateLabel(contact.nextVisitDate)}`)),
+    ...todays.map((event) => dueRow(`#event/${event.id}`, event.title,
+      ['Event today', event.time ? formatTime(event.time) : '', eventDayInfo(event, today)].filter(Boolean).join(' · '))),
+    ...studies.map((contact) => dueRow(`#contact/${contact.id}`, contact.name, `Bible study today${contact.studyTime ? ` · ${formatTime(contact.studyTime)}` : ''}`)),
+    ...visits.map((contact) => dueRow(`#contact/${contact.id}`, contact.name, contact.nextVisitDate === today ? 'Visit due today' : `Visit overdue · was ${dateLabel(contact.nextVisitDate)}`)),
   ];
   return h('div', { class: 'list' }, rows);
 }
 
-function dueRow(contact, sub) {
-  return h('a', { class: 'row', href: `#contact/${contact.id}`, onclick: FROM_HOME },
+// Events starting in the next two weeks, so an assembly or convention is not a surprise.
+function comingUp(events, today) {
+  const soon = upcomingEvents(events, today, 14).slice(0, 5);
+  if (!soon.length) return null;
+  return h('div', {},
+    h('h2', { class: 'section-title' }, 'Coming up'),
+    h('div', { class: 'list' }, soon.map((event) =>
+      dueRow(`#event/${event.id}`, event.title, [dateLabel(event.date), event.time ? formatTime(event.time) : ''].filter(Boolean).join(' · ')))));
+}
+
+function dueRow(href, title, sub) {
+  return h('a', { class: 'row', href, onclick: FROM_HOME },
     h('span', { class: 'row-main' },
-      h('span', { class: 'row-title' }, contact.name),
+      h('span', { class: 'row-title' }, title),
       h('span', { class: 'row-sub' }, sub)),
     h('span', { class: 'chevron', 'aria-hidden': 'true' }, '›'));
 }

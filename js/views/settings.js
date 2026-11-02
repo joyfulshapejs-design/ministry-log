@@ -166,8 +166,8 @@ async function shareOrDownload(file) {
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-function describe({ entries, contacts, notes, remarks }) {
-  return `${plural(entries, 'time entry', 'time entries')}, ${plural(contacts, 'contact')}, ${plural(notes, 'study note')}, ${plural(remarks, 'monthly remark')}`;
+function describe({ entries, contacts, notes, remarks, events }) {
+  return `${plural(entries, 'time entry', 'time entries')}, ${plural(contacts, 'contact')}, ${plural(notes, 'study note')}, ${plural(remarks, 'monthly remark')}, ${plural(events, 'event')}`;
 }
 
 function backupSection(root, backupFile, lastExportAt) {
@@ -215,6 +215,7 @@ function backupSection(root, backupFile, lastExportAt) {
       contacts: await count('contacts'),
       notes: await count('studySessions'),
       remarks: await count('monthlyRemarks'),
+      events: await count('events'),
     };
     const when = result.exportedAt ? new Date(result.exportedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'an unknown date';
 

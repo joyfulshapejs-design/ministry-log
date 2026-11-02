@@ -385,3 +385,8 @@ html, body {
   cursor: pointer;
 }
 .banner.static { cursor: default; }
+
+/* ---- Events ---- */
+.dot.event { background: #af52de; }
+.hint { margin: -4px 0 12px 4px; font-size: 13px; }
+.actions .button { flex: 1; min-width: 0; }
